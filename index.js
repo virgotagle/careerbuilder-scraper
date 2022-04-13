@@ -1,6 +1,27 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
-const fs = require("fs");
+const XLSX = require("xlsx");
+
+(async () => {
+  const keywords = "Nurse";
+  const location = "Huntington Beach";
+  const list = await getJobList(keywords, location);
+  createXLS(keywords, location, list);
+})();
+
+async function getJobList(keywords, location, index = 1, list = []) {
+  try {
+    const results = await axios({
+      url: `https://www.careerbuilder.com/jobs?keywords=${encodeURI(keywords)}&location=${encodeURI(location)}&page_number=${index}`,
+      method: "GET",
+    });
+    const parsedJobList = parseJobList(results.data);
+    if (parsedJobList.length === 25) return getJobList(keywords, location, (index += 1), list.concat(parsedJobList));
+    return list.concat(parsedJobList);
+  } catch (error) {
+    return [];
+  }
+}
 
 function parseJobList(html) {
   const list = [];
@@ -31,23 +52,15 @@ function parseJobList(html) {
   return list;
 }
 
-async function getJobList(keywords, location, index = 1, list = []) {
-  try {
-    const results = await axios({
-      url: `https://www.careerbuilder.com/jobs?keywords=${encodeURI(keywords)}&location=${encodeURI(location)}&page_number=${index}`,
-      method: "GET",
-    });
-    const parsedJobList = parseJobList(results.data);
-    if (parsedJobList.length === 25) return getJobList(keywords, location, (index += 1), list.concat(parsedJobList));
-    return list.concat(parsedJobList);
-  } catch (error) {
-    return [];
+function createXLS(keywords, location, list) {
+  if (list && list.length) {
+    const name = `${keywords}-${location}`;
+    let arr = [["Publish Time", "Job Title", "Company Name", "Location", "Details Link"]];
+    list.forEach((obj) => arr.push([obj.publishTime, obj.jobTitle, obj.companyName, obj.location, `https://www.careerbuilder.com${obj.href}`]));
+    const wb = XLSX.utils.book_new();
+    wb.SheetNames.push(name);
+    const ws = XLSX.utils.aoa_to_sheet(arr);
+    wb.Sheets[name] = ws;
+    XLSX.writeFile(wb, `${name}.xlsx`);
   }
 }
-
-(async () => {
-  const keywords = "Programmer";
-  const location = "Huntington Beach";
-  const list = await getJobList(keywords, location);
-  console.log(list);
-})();
